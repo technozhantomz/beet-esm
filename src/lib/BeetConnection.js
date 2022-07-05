@@ -222,14 +222,13 @@ class BeetConnection {
          */
         this.socket.on("api", async (msg) => {
           console.log("socket.api"); // groupCollapsed
-          console.log(msg)
 
           const relevantRequest = this.requests.find((x) => {
             return x.id === msg.id || x.id.toString() === msg.id
           });
 
           if (!relevantRequest) {
-            console.log(`No relevant requests: ${relevantRequest}`);
+            console.log(`No relevant requests`);
             return;
           }
 
@@ -238,10 +237,9 @@ class BeetConnection {
               console.log("msg code 2: reset")
               this.reset();
             }
-            relevantRequest.reject(response);
+            relevantRequest.reject(msg.payload);
           }
 
-          let response;
           if (msg.encrypted) {
             this.otp.counter = msg.id;
             let key = this.otp.generate();
@@ -256,8 +254,6 @@ class BeetConnection {
           } else {
             relevantRequest.resolve(msg.payload);
           }
-
-          console.groupEnd();
         });
 
         this.socket.on("disconnect", async () => {
@@ -265,10 +261,6 @@ class BeetConnection {
           this.socket = null;
           this.requests = [];
           console.log("Websocket closed");
-        });
-
-        this.socket.on("error", (error) => {
-          console.log(`BeetConnection error: ${error}`);
         });
 
         this.socket.on("reconnect_error", (error) => {
