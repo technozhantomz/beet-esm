@@ -1,27 +1,17 @@
-/**
- * @param {BeetConnection} connection
- * @param {string} messageToSign
- */
-async function signMessage(connection, messageToSign) {
-  let signedMessaged;
-  try {
-    signedMessaged = await connection.signMessage(messageToSign);
-  } catch (error) {
-    return;
-  }
-  console.log(signedMessaged)
-}
-
+import { connect, link } from '../../src/index.js';
+import { readData, storeData } from '../lib/localDB.js'
 
 let run = async function () {
+  let identity = await readData("signedMessageExample");
+
   let connection;
   try {
     connection = await connect(
-      "application name",
-      "Browser type forwarded by app",
-      "application url",
+      "signedMessageExample",
+      "Browser type",
+      "localhost",
       null,
-      null
+      identity ?? null
     );
   } catch (error) {
     console.error(error);
@@ -36,10 +26,37 @@ let run = async function () {
     return;
   }
 
-  if (connection.secret) {
-    console.log('Successfully linked')
-    signMessage(connection, 'example message to sign')
+  if (!connection.identity) {
+    console.log("Link rejected");
+    return;
   }
+
+  let signedMessaged;
+  if (connection.secret) {
+    console.log('Successfully linked. Signing message.');
+    try {
+      signedMessaged = await connection.signMessage('example message to sign');
+    } catch (error) {
+      console.log(error);
+      return;
+    }
+    console.log(signedMessaged)
+  }
+
+  console.log("Now verifying the above signed message")
+  
+  let verifiedMessage;
+  if (signedMessaged) {
+    try {
+      verifiedMessage = await connection.verifyMessage(JSON.stringify(signedMessaged));
+    } catch (error) {
+      console.log(error);
+      return;
+    }
+    console.log(verifiedMessage ? 'Valid message signature' : 'Invalid message signature')
+  }
+
+  storeData(connection.identity)
 }
 
 run();

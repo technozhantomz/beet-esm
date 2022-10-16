@@ -1,12 +1,14 @@
+import {connect, link} from '../src/index.js';
+
+
+
 let linkToBeet = async function () {
   let connection;
   try {
     connection = await connect(
-      "application name",
-      "Browser type forwarded by app",
-      "application url",
-      null,
-      null
+      "LinkExample",
+      "Browser type",
+      "localhost"
     );
   } catch (error) {
     console.error(error);
@@ -21,10 +23,14 @@ let linkToBeet = async function () {
     return;
   }
 
-  if (connection.secret) {
-    console.log('Successfully linked')
-    console.log(connection.identity);
+  if (!connection.identity) {
+    console.log("Link rejected");
+    return;
   }
+
+  console.log('Successfully linked')
+  //console.log(connection.identity);
+  console.log(connection);
 }
 
 linkToBeet();

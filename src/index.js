@@ -3,6 +3,9 @@ import BeetConnection from "./lib/BeetConnection.js";
 const allowedChains = ["ANY", "BTS", "BNB_TEST", "STEEM", "BTC"];
 import { io } from "socket.io-client";
 
+let httpPort = 60555;
+let httpsPort = 60554;
+
 /**
  * Gets an instance of a beet connected application, and does the identity handling for the requested chain.
  *
@@ -11,7 +14,7 @@ import { io } from "socket.io-client";
  * @param {String} origin (website url)
  * @param {String} chain (Target blockchain)
  * @param {BeetConnection} existingBeetConnection (Provide stored connection)
- * @param {boolean} identity
+ * @param {Object} identity
  * @returns {BeetConnection}
 */
 export const connect = async function (
@@ -21,26 +24,78 @@ export const connect = async function (
   existingBeetConnection = null,
   identity = null
 ) {
-  let appHash;
-  try {
-    appHash = sha256(browser + ' ' + origin + ' ' + appName).toString();
-  } catch (error) {
-    console.log(error);
-    return;
-  }
+  return new Promise(async (resolve, reject) => {
+    let appHash;
+    try {
+      appHash = sha256(browser + ' ' + origin + ' ' + appName).toString();
+    } catch (error) {
+      console.log(error);
+      return;
+    }
+  
+    let beetConnection;
+    try {
+      beetConnection = existingBeetConnection
+                          ? existingBeetConnection // attempt to reconnect
+                          : new BeetConnection(appName, appHash, browser, origin, identity);
+    } catch (error) {
+      console.log(error);
+      return;
+    }
 
-  let beetConnection;
-  try {
-    beetConnection = existingBeetConnection
-                        ? existingBeetConnection // attempt to reconnect
-                        : new BeetConnection(appName, appHash, browser, origin, identity);
-  } catch (error) {
-    console.log(error);
-    return;
-  }
+    let ssl;
+    try {
+      ssl = await checkBeet(true, httpsPort);
+    } catch (error) {
+      console.log(`checkBeet ssl: ${error}`);
+    }
 
-  console.log(`Connected to Beet`)
-  return beetConnection;
+    let http;
+    try {
+      http = await checkBeet(false, httpPort);
+    } catch (error) {
+      console.log(`checkBeet http: ${error}`);
+    }
+
+    if (!ssl && !http) {
+      console.log("Beet is offline, launch it then try again.");
+      return reject("Beet is offline");
+    }
+
+    let authToken;
+    try {
+      authToken = await beetConnection.connect(
+        identity,
+        ssl ? true : false,
+        ssl ? httpsPort : httpPort
+      )
+    } catch (error) {
+      console.log(`${ssl ? 'https' : 'http'} connection attempt error: ${error}`);
+    }
+
+    if (!authToken) { // fallback to http
+      try {
+        authToken = await beetConnection.connect(identity, false, httpPort)
+      } catch (error) {
+        console.log(`http connection attempt error: ${error}`);
+      }
+    }
+
+    try {
+      await beetConnection.setAuth(authToken);
+    } catch (error) {
+      console.log(error);
+      return;
+    }
+
+    if (beetConnection.connected) {
+      console.log(`Connected to Beet`)
+    }
+
+    return resolve(beetConnection);
+  });
+
+
 }
 
 /**
@@ -72,27 +127,30 @@ export const link = async function (chain = 'ANY', beetConnection) {
 
 /**
  * Checks for a Beet web socket response
- *
+ * @param {boolean} enableSSL
  * @returns {boolean} Resolves to true (if installed) and false (not installed)
 */
-export const checkBeet = async function () {
+export const checkBeet = async function (enableSSL = true, port = 60554) {
   return new Promise((resolve, reject) => {
     let socket;
     try {
-      socket = io("ws://localhost:60555");
+      socket = enableSSL
+                ? io(`wss://local.get-beet.io:${port}/`, {transports: ['websocket'], rejectUnauthorized: false})
+                : io(`ws://localhost:${port}`);
     } catch (error) {
       console.log(error);
       resolve(false);
     }
 
-    socket.on("connect_error", () => {
-      console.log("connect_error");
+    socket.on("connect_error", (error) => {
       socket.disconnect();
       resolve(false);
     });
+    
+    socket.emit("ping", 'pong');
 
-    socket.emit("ping", (response) => {
-      resolve(response ? true : false);
+    socket.on("pong", (response) => {
+      resolve(response);
     });
   });
 }

@@ -1,3 +1,6 @@
+import { connect, link } from '../../src/index.js';
+import { readData, storeData } from '../lib/localDB.js'
+
 /**
  * @param {BeetConnection} connection
  * @param {string} targetAccount
@@ -15,14 +18,16 @@ async function transfer(connection, targetAccount, amountInSatoshi, assetId) {
 }
 
 let run = async function () {
+  let identity = await readData("TransferExample");
+
   let connection;
   try {
     connection = await connect(
-      "application name",
-      "Browser type forwarded by app",
-      "application url",
+      "TransferExample",
+      "Browser type",
+      "localhost",
       null,
-      null
+      identity ?? null
     );
   } catch (error) {
     console.error(error);
